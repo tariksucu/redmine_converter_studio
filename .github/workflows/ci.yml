@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+
+# Cancel in-progress runs for the same branch/PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Redmine ${{ matrix.redmine }}, Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - redmine: '7.0-stable'
+            ruby: '3.4'
+          - redmine: '7.0-stable'
+            ruby: '4.0'
+          - redmine: '6.1-stable'
+            ruby: '3.3'
+
+    steps:
+      - name: Redmine ${{ matrix.redmine }}
+        run: git clone --depth 1 --branch ${{ matrix.redmine }} https://github.com/redmine/redmine.git redmine
+
+      - uses: actions/checkout@v7
+        with:
+          path: redmine/plugins/redmine_converter_studio
+
+      # SQLite for the tests; Redmine's Gemfile reads its adapters from this file.
+      - name: Database configuration
+        working-directory: redmine
+        run: |
+          cat > config/database.yml <<'YAML'
+          test:
+            adapter: sqlite3
+            database: db/redmine_test.sqlite3
+            timeout: 5000
+          YAML
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          working-directory: redmine
+          bundler-cache: true
+
+      - name: Test database
+        working-directory: redmine
+        env:
+          RAILS_ENV: test
+        run: |
+          bundle exec rake generate_secret_token
+          bin/rails db:create db:migrate
+          bin/rails redmine:plugins:migrate
+
+      # Redmine's own RuboCop configuration; it leaves plugins out, so the files are named.
+      - name: RuboCop
+        working-directory: redmine/plugins/redmine_converter_studio
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/redmine/Gemfile
+        run: bundle exec rubocop $(git ls-files '*.rb' '*.rake')
+
+      - name: Tests
+        working-directory: redmine
+        env:
+          RAILS_ENV: test
+        run: bin/rails redmine:plugins:test NAME=redmine_converter_studio

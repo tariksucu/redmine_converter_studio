@@ -1,0 +1,10 @@
+# RuboCop with Redmine's own rules: the plugin is checked inside a Redmine checkout, as
+# plugins/redmine_converter_studio (run `bundle exec rubocop` in this folder). Redmine's file
+# leaves every plugin out; this list puts this one back in.
+inherit_from: ../../.rubocop.yml
+
+AllCops:
+  Exclude:
+    - 'vendor/**/*'
+    - 'tmp/**/*'
+    - 'node_modules/**/*'

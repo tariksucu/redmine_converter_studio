@@ -1,0 +1,45 @@
+<h2>
+  <%= safe_join([link_to_attachment_container(@attachment.container), link_to_attachment(@attachment),
+                 l(:converter_studio_button_convert)].compact, ' » ') %>
+</h2>
+
+<% if !RedmineConverterStudio::Configuration.configured? %>
+  <p class="warning"><%= l(:converter_studio_text_not_configured) %></p>
+<% elsif @catalog.nil? %>
+  <p class="warning"><%= l(:converter_studio_text_formats_unavailable, reason: @catalog_error) %></p>
+<% elsif @targets.empty? %>
+  <p class="nodata"><%= l(:converter_studio_text_no_targets, name: @attachment.filename) %></p>
+<% else %>
+<%= form_tag converter_studio_conversions_path(@attachment), id: 'converter-studio-form' do %>
+  <div class="box tabular">
+    <p>
+      <label for="converter_studio_to"><%= l(:converter_studio_field_to) %></label>
+      <%= select_tag 'to', options_for_select(@targets), id: 'converter_studio_to' %>
+    </p>
+    <% if @catalog.format_of(@attachment.filename) == 'pdf' %>
+    <p>
+      <label for="converter_studio_ocr"><%= l(:converter_studio_field_ocr_short) %></label>
+      <%= check_box_tag 'ocr', '1', false, id: 'converter_studio_ocr' %>
+      <em class="info"><%= l(:converter_studio_text_ocr_info) %></em>
+    </p>
+    <% end %>
+    <p>
+      <label><%= l(:converter_studio_label_where) %></label>
+      <span><%= l(:converter_studio_text_result_goes, where: link_to_attachment_container(@attachment.container)).html_safe %></span>
+    </p>
+  </div>
+  <p class="info">
+    <%= l(:converter_studio_text_privacy) %>
+    <%= link_to l(:converter_studio_label_pricing), 'https://converter.studio/pricing', class: 'external' %> ·
+    <%= link_to l(:converter_studio_label_privacy), 'https://converter.studio/privacy', class: 'external' %>
+  </p>
+  <%= submit_tag l(:converter_studio_button_convert) %>
+<% end %>
+<% end %>
+
+<% if @conversions.any? %>
+  <h3><%= l(:converter_studio_label_earlier) %></h3>
+  <%= render partial: 'converter_studio_conversions/list', locals: { conversions: @conversions, show_container: false } %>
+<% end %>
+
+<% html_title "#{l(:converter_studio_button_convert)} #{@attachment.filename}" %>

@@ -1,0 +1,38 @@
+<fieldset class="box converter-studio-rule-form">
+  <legend><%= l(:converter_studio_label_new_rule) %></legend>
+  <% if @catalog %>
+  <%= form_tag project_converter_studio_rules_path(@project), id: 'converter-studio-rule-form' do %>
+  <div class="tabular">
+    <p>
+      <label for="rule_extensions"><%= l(:field_converter_studio_rule_extensions) %> <span class="required">*</span></label>
+      <%= text_field_tag 'rule[extensions]', '', id: 'rule_extensions', size: 40, placeholder: 'heic heif' %>
+      <em class="info"><%= l(:converter_studio_text_extensions_info) %></em>
+    </p>
+    <p>
+      <label for="rule_target_format"><%= l(:field_converter_studio_rule_target_format) %></label>
+      <%= select_tag 'rule[target_format]',
+                     options_for_select(@catalog.all_targets.map { |id| [@catalog.name_of(id), id] }, 'pdf'),
+                     id: 'rule_target_format' %>
+    </p>
+    <p>
+      <label><%= l(:field_converter_studio_rule_containers) %></label>
+      <% ConverterStudioRule::CONTAINERS.each do |kind| %>
+        <label class="inline">
+          <%= check_box_tag 'rule[containers][]', kind, kind == 'issues', id: "rule_containers_#{kind}" %>
+          <%= l(:"converter_studio_label_container_#{kind}") %>
+        </label>
+      <% end %>
+    </p>
+    <p>
+      <label for="rule_ocr"><%= l(:converter_studio_field_ocr_short) %></label>
+      <%= check_box_tag 'rule[ocr]', '1', false, id: 'rule_ocr' %>
+      <em class="info"><%= l(:converter_studio_text_ocr_rule_info) %></em>
+    </p>
+  </div>
+  <p class="info"><%= l(:converter_studio_text_rules_cost) %></p>
+  <%= submit_tag l(:button_add) %>
+  <% end %>
+  <% else %>
+  <p class="warning"><%= @catalog_error %></p>
+  <% end %>
+</fieldset>

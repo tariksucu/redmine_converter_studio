@@ -1,0 +1,4 @@
+<% if User.current.logged? && (RedmineConverterStudio::Access.enabled?(@project) || (controller_name == 'settings' && action_name == 'plugin')) %>
+<%= stylesheet_link_tag 'converter_studio', plugin: 'redmine_converter_studio' %>
+<%= javascript_include_tag 'converter_studio', plugin: 'redmine_converter_studio', defer: true %>
+<% end %>

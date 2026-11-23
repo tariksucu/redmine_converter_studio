@@ -1,0 +1,51 @@
+<h2><%= l(:label_converter_studio) %></h2>
+
+<% unless RedmineConverterStudio::Configuration.configured? %>
+<p class="warning">
+  <%= l(:converter_studio_text_not_configured) %>
+  <% if User.current.admin? %>
+    <%= link_to l(:converter_studio_label_settings), plugin_settings_path(id: 'redmine_converter_studio') %>
+  <% end %>
+</p>
+<% end %>
+
+<p><%= l(:converter_studio_text_intro) %></p>
+
+<h3><%= l(:converter_studio_label_conversions) %></h3>
+<% if @conversions.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <%= render partial: 'converter_studio_conversions/list', locals: { conversions: @conversions, show_container: true } %>
+<% end %>
+
+<h3 id="rules"><%= l(:converter_studio_label_rules) %></h3>
+<p><%= l(:converter_studio_text_rules_intro) %></p>
+<% if @rules.any? %>
+<table class="list converter-studio-rules">
+  <tbody>
+  <% @rules.each do |rule| %>
+    <tr class="<%= rule.active? ? '' : 'disabled' %>" id="converter-studio-rule-<%= rule.id %>">
+      <td class="name"><%= converter_studio_rule_text(rule) %><%= " (#{l(:converter_studio_field_ocr_short)})" if rule.ocr? %></td>
+      <td class="status"><%= rule.active? ? l(:converter_studio_label_rule_on) : l(:converter_studio_label_rule_off) %></td>
+      <td class="buttons">
+        <% if @can_manage_rules %>
+          <%= button_to(rule.active? ? l(:converter_studio_button_rule_off) : l(:converter_studio_button_rule_on),
+                        converter_studio_rule_path(rule, active: rule.active? ? '0' : '1'),
+                        method: :patch, form_class: 'converter-studio-button') %>
+          <%= button_to l(:button_delete), converter_studio_rule_path(rule), method: :delete,
+                        form_class: 'converter-studio-button', data: { confirm: l(:text_are_you_sure) } %>
+        <% end %>
+      </td>
+    </tr>
+  <% end %>
+  </tbody>
+</table>
+<% else %>
+  <p class="nodata"><%= l(:converter_studio_text_no_rules) %></p>
+<% end %>
+
+<% if @can_manage_rules %>
+  <%= render partial: 'converter_studio_conversions/rule_form' %>
+<% end %>
+
+<% html_title l(:label_converter_studio) %>

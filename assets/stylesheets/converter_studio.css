@@ -1,0 +1,45 @@
+/*
+ * Converter Studio for Redmine
+ * Copyright (C) 2026 Converter Studio
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+.converter-studio-item {
+  white-space: nowrap;
+}
+.converter-studio-item .converter-studio-convert {
+  margin-left: 4px;
+}
+.converter-studio-state {
+  margin-left: 6px;
+  font-size: 0.9em;
+  color: #555;
+  white-space: normal;
+}
+.converter-studio-state-failed {
+  color: #c61a1a;
+}
+.converter-studio-state-quoted {
+  color: #b35c00;
+}
+.converter-studio-ok {
+  color: #1a7f37;
+}
+.converter-studio-error {
+  color: #c61a1a;
+}
+form.converter-studio-button {
+  display: inline;
+}
+table.converter-studio-conversions td.status {
+  white-space: normal;
+  text-align: left;
+}
+table.converter-studio-rules td.name {
+  text-align: left;
+}
+table.converter-studio-rules tr.disabled td.name {
+  color: #888;
+}
+fieldset.converter-studio-rule-form label.inline {
+  margin-right: 12px;
+}

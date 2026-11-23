@@ -1,0 +1,51 @@
+<div class="autoscroll">
+<table class="list converter-studio-conversions">
+  <thead>
+    <tr>
+      <th><%= l(:field_created_on) %></th>
+      <th><%= l(:label_attachment) %></th>
+      <% if show_container %><th><%= l(:converter_studio_label_where) %></th><% end %>
+      <th><%= l(:converter_studio_field_to) %></th>
+      <th><%= l(:field_status) %></th>
+      <th><%= l(:converter_studio_label_credits) %></th>
+      <th><%= l(:field_author) %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  <% conversions.each do |conversion| %>
+    <tr class="converter-studio-conversion converter-studio-<%= conversion.status %>" id="converter-studio-conversion-<%= conversion.id %>">
+      <td class="created_on"><%= format_time(conversion.created_on) %></td>
+      <td class="filename">
+        <%= conversion.attachment ? link_to_attachment(conversion.attachment) : conversion.source_name %>
+        <% if conversion.rule_id %><em class="info"><%= l(:converter_studio_label_automatic) %></em><% end %>
+      </td>
+      <% if show_container %>
+      <td class="container"><%= conversion.container ? link_to_attachment_container(conversion.container) : '-' %></td>
+      <% end %>
+      <td class="format"><%= converter_studio_format_name(conversion.target_format) %></td>
+      <td class="status">
+        <% if conversion.done? && conversion.result_attachment %>
+          <%= l(:converter_studio_status_done) %>: <%= link_to_attachment conversion.result_attachment %>
+        <% else %>
+          <%= converter_studio_status_text(conversion) %>
+        <% end %>
+      </td>
+      <td class="credits"><%= conversion.credits || '-' %></td>
+      <td class="author"><%= conversion.user ? link_to_user(conversion.user) : '-' %></td>
+      <td class="buttons">
+        <% if conversion.quoted? %>
+          <%= button_to l(:converter_studio_button_confirm, credits: conversion.credits.to_i),
+                        confirm_converter_studio_conversion_path(conversion, back_url: request.fullpath),
+                        method: :post, form_class: 'converter-studio-button' %>
+        <% elsif conversion.retryable? %>
+          <%= button_to l(:converter_studio_button_run_again),
+                        run_again_converter_studio_conversion_path(conversion, back_url: request.fullpath),
+                        method: :post, form_class: 'converter-studio-button' %>
+        <% end %>
+      </td>
+    </tr>
+  <% end %>
+  </tbody>
+</table>
+</div>

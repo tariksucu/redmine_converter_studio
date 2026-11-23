@@ -1,0 +1,21 @@
+<% items = RedmineConverterStudio::PageLinks.items(self) %>
+<% if items.any? %>
+<% own_page = RedmineConverterStudio::PageLinks.attachment_page?(self) %>
+<% label = l(:converter_studio_button_convert_ellipsis) %>
+<div id="converter-studio-links" hidden data-place="<%= own_page ? 'contextual' : 'rows' %>">
+  <% items.each do |item| %>
+  <span class="converter-studio-item" data-attachment-id="<%= item.attachment.id %>">
+    <%= link_to sprite_icon('reload', label, icon_only: !own_page),
+                new_converter_studio_conversion_path(item.attachment),
+                class: "converter-studio-convert #{own_page ? 'icon' : 'icon-only'} icon-reload",
+                title: l(:converter_studio_text_convert_title, name: item.attachment.filename) %>
+    <% if (conversion = item.conversion) %>
+    <%= link_to RedmineConverterStudio::StatusText.for(conversion),
+                project_converter_studio_path(conversion.project),
+                class: "converter-studio-state converter-studio-state-#{conversion.status}",
+                title: l(:converter_studio_text_state_title, target: conversion.target_format.upcase) %>
+    <% end %>
+  </span>
+  <% end %>
+</div>
+<% end %>

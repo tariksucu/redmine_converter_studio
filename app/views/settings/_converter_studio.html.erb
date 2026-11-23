@@ -1,0 +1,63 @@
+<% config = RedmineConverterStudio::Configuration %>
+<% source = config.api_key_source %>
+<p>
+  <label for="settings_new_api_key"><%= l(:converter_studio_field_api_key) %></label>
+  <%= password_field_tag 'settings[new_api_key]', '', id: 'settings_new_api_key', size: 50,
+                         autocomplete: 'off', placeholder: (source == :settings ? config.api_key_hint : 'cvs_live_…') %>
+  <em class="info">
+    <% case source %>
+    <% when :environment %>
+      <%= l(:converter_studio_text_key_from_environment, name: RedmineConverterStudio::Configuration::ENV_KEY, hint: config.api_key_hint) %>
+    <% when :settings %>
+      <%= l(:converter_studio_text_key_saved, hint: config.api_key_hint) %>
+      <%= l(config.encryption? ? :converter_studio_text_key_encrypted : :converter_studio_text_key_plain) %>
+    <% else %>
+      <%= l(:converter_studio_text_key_none) %>
+      <%= link_to 'converter.studio/account', 'https://converter.studio/account#api-keys', class: 'external' %>
+    <% end %>
+  </em>
+</p>
+<% if source == :settings %>
+<p>
+  <label for="settings_remove_api_key"><%= l(:converter_studio_field_remove_api_key) %></label>
+  <%= check_box_tag 'settings[remove_api_key]', '1', false, id: 'settings_remove_api_key' %>
+</p>
+<% end %>
+<p>
+  <label for="settings_base_url"><%= l(:converter_studio_field_base_url) %></label>
+  <%= text_field_tag 'settings[base_url]', settings['base_url'].presence || RedmineConverterStudio::DEFAULT_BASE_URL,
+                     id: 'settings_base_url', size: 50 %>
+  <em class="info"><%= l(:converter_studio_text_base_url_info, url: RedmineConverterStudio::DEFAULT_BASE_URL) %></em>
+</p>
+<p>
+  <label for="settings_max_credits"><%= l(:converter_studio_field_max_credits) %></label>
+  <%= number_field_tag 'settings[max_credits]', config.max_credits, id: 'settings_max_credits', min: 0,
+                       max: RedmineConverterStudio::Configuration::MAX_CREDITS_LIMIT %>
+  <em class="info"><%= l(:converter_studio_text_max_credits_info) %></em>
+</p>
+<p>
+  <label><%= l(:converter_studio_field_connection) %></label>
+  <% if source %>
+    <% begin %>
+      <% account = RedmineConverterStudio::Client.from_settings.account(timeout: 10) %>
+      <span class="converter-studio-ok">
+        <%= l(:converter_studio_text_connected, email: account['email'].to_s, plan: account['plan'].to_s,
+                                                credits: account['credits'].to_i) %>
+      </span>
+    <% rescue RedmineConverterStudio::ApiError => e %>
+      <span class="converter-studio-error"><%= e.message %></span>
+    <% end %>
+  <% else %>
+    <span><%= l(:converter_studio_text_key_none_short) %></span>
+  <% end %>
+</p>
+<p>
+  <label><%= l(:converter_studio_field_queue) %></label>
+  <% adapter = ActiveJob::Base.queue_adapter_name.to_s %>
+  <span>
+    <%= adapter %>.
+    <%= l(adapter == 'async' ? :converter_studio_text_queue_async : :converter_studio_text_queue_other) %>
+  </span>
+</p>
+<p class="info"><%= l(:converter_studio_text_settings_privacy) %>
+  <%= link_to 'converter.studio/privacy', 'https://converter.studio/privacy', class: 'external' %></p>
