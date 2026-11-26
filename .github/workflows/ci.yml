@@ -21,7 +21,7 @@ permissions:
 jobs:
   test:
     name: Redmine ${{ matrix.redmine }}, Ruby ${{ matrix.ruby }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -37,8 +37,12 @@ jobs:
             ruby: '3.3'
           - redmine: '5.1-stable'
             ruby: '3.2'
+          # Redmine 5.0 takes the sqlite3 gem 1.4, whose C extension hands SQLite a callback of the
+          # wrong pointer type: GCC 14 and later (ubuntu-latest is 26.04) stop on that, GCC 13 on
+          # Ubuntu 24.04 warns, as GCC 12 on Debian 12 does.
           - redmine: '5.0-stable'
             ruby: '3.1'
+            os: ubuntu-24.04
 
     steps:
       - name: Redmine ${{ matrix.redmine }}
