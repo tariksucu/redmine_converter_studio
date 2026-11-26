@@ -6,20 +6,18 @@
 
 namespace :redmine do
   namespace :converter_studio do
-    desc 'Runs again the conversions whose job was lost (a restart with the default queue adapter, for example)'
+    desc 'Runs again the conversions whose job was lost (a worker killed mid-run, for example)'
     task resume: :environment do
-      stale = ConverterStudioConversion.unfinished.where.not(status: 'quoted')
-                                       .where(updated_on: ...ConverterStudioConversion::STALE_AFTER.ago)
-      # Redmine's default adapter runs jobs in the process that queued them: this task's process
-      # ends with it, so it runs them itself, one after the other, to the end.
-      here = %w[async inline].include?(ActiveJob::Base.queue_adapter_name.to_s)
+      # With an in-process adapter (Redmine's default, async) the queue would end with this task's
+      # process: the task runs them itself, one after the other, to the end. Otherwise they go to
+      # the queue's workers.
+      here = %w[async inline].include?(ConverterStudioConvertJob.queue_adapter_name.to_s)
       count = 0
-      stale.find_each do |conversion|
-        conversion.touch
+      ConverterStudioConversion.abandoned.find_each do |conversion|
         if here
           RedmineConverterStudio::Converter.new(conversion, hand_over: false).run
         else
-          conversion.enqueue
+          next unless conversion.requeue_if_abandoned!
         end
         count += 1
       end

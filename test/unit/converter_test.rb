@@ -32,13 +32,13 @@ class ConverterStudioConverterTest < ActiveSupport::TestCase
     journal = @issue.journals.order(:id).last
     assert_equal User.find(2), journal.user
     assert_equal 'Converted report.docx to PDF with Converter Studio. Credits used: 1.', journal.notes
-    detail = journal.details.sole
+    detail = only(journal.details)
     assert_equal ['attachment', result.id.to_s, 'report.pdf'], [detail.property, detail.prop_key, detail.value]
 
-    create = @api.requests_to('POST', '/v1/conversions').sole
+    create = only(@api.requests_to('POST', '/v1/conversions'))
     assert_equal "redmine-#{conversion.id}-#{conversion.upload_id}", create[:idempotency_key]
     assert_equal "redmine/#{RedmineConverterStudio::VERSION}", create[:client]
-    assert_equal({ 'to' => 'pdf', 'max' => 20 }, { 'to' => @api.conversions.values.sole[:to], 'max' => @api.conversions.values.sole[:max] })
+    assert_equal({ 'to' => 'pdf', 'max' => 20 }, { 'to' => only(@api.conversions.values)[:to], 'max' => only(@api.conversions.values)[:max] })
   end
 
   def test_wiki_pages_and_documents_get_their_result_without_a_journal
@@ -55,7 +55,7 @@ class ConverterStudioConverterTest < ActiveSupport::TestCase
 
   def test_the_ocr_option_reaches_the_api
     convert(attach(@issue, 'scan.pdf'), 'txt', options: { 'ocr' => true })
-    assert_equal({ 'ocr' => true }, @api.conversions.values.sole[:options])
+    assert_equal({ 'ocr' => true }, only(@api.conversions.values)[:options])
   end
 
   def test_a_failed_conversion_keeps_the_api_reason_and_says_so_on_the_issue

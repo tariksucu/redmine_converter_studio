@@ -74,8 +74,9 @@ module RedmineConverterStudio
     end
 
     # Sends the file to its upload slot: in one request, or in parts (Upload-Offset) when it is
-    # larger than one request may carry. Returns the API's answer for the complete file.
-    def send_file(upload, io, size)
+    # larger than one request may carry. Returns the API's answer for the complete file. The block,
+    # when given, is called as the file goes out (a sign of life during a long upload).
+    def send_file(upload, io, size, &progress)
       in_parts = size > upload['part_bytes']
       offset = 0
       ((size / upload['part_bytes']) + 5).times do
@@ -84,7 +85,7 @@ module RedmineConverterStudio
         headers = { 'Content-Type' => 'application/octet-stream' }
         headers['Upload-Offset'] = offset.to_s if in_parts
         response = request(:put, upload['url'], auth: false, headers: headers,
-                                                stream: PartReader.new(io, length), length: length,
+                                                stream: PartReader.new(io, length, &progress), length: length,
                                                 timeout: TRANSFER_TIMEOUT)
         status = response.code.to_i
         data = decode(response)
@@ -124,7 +125,7 @@ module RedmineConverterStudio
     end
 
     # Downloads a result into a Tempfile (rewound): only from the API's own address, without
-    # redirects, and never more than +max_bytes+.
+    # redirects, and never more than +max_bytes+. The block, when given, is called as it arrives.
     def download(url, max_bytes)
       raise ApiError.new('downloadFailed', 'converter.studio sent an unexpected download address.') unless api_address?(url)
 
@@ -147,6 +148,7 @@ module RedmineConverterStudio
             raise too_large(max_bytes) if size > max_bytes
 
             file.write(chunk)
+            yield if block_given?
           end
         end
       end
@@ -176,14 +178,16 @@ module RedmineConverterStudio
     def self.safe_name(name)
       clean = name.to_s.delete("\0").tr('/\\', '').strip
       clean = 'file' if clean.empty?
-      clean.length > 200 ? clean[-200..] : clean
+      clean.length > 200 ? clean[-200, 200] : clean
     end
 
-    # Reads at most +length+ bytes of an IO, for one request's body.
+    # Reads at most +length+ bytes of an IO, for one request's body, calling the block (when given)
+    # for each piece read.
     class PartReader
-      def initialize(io, length)
+      def initialize(io, length, &progress)
         @io = io
         @left = length
+        @progress = progress
       end
 
       def read(length = nil, buffer = nil)
@@ -194,6 +198,7 @@ module RedmineConverterStudio
         length = length.nil? ? @left : [length, @left].min
         data = @io.read(length, buffer)
         @left -= data.bytesize if data
+        @progress&.call
         data
       end
     end
@@ -236,7 +241,7 @@ module RedmineConverterStudio
       http.use_ssl = uri.scheme == 'https'
       http.open_timeout = [OPEN_TIMEOUT, timeout].min
       http.read_timeout = timeout
-      http.write_timeout = timeout
+      http.write_timeout = timeout if http.respond_to?(:write_timeout=) # Ruby 2.6 and later
       http
     end
 

@@ -32,6 +32,13 @@ jobs:
             ruby: '4.0'
           - redmine: '6.1-stable'
             ruby: '3.3'
+          # Debian 13 ships Redmine 6.0 with Ruby 3.3, Debian 12 Redmine 5.0 with Ruby 3.1.
+          - redmine: '6.0-stable'
+            ruby: '3.3'
+          - redmine: '5.1-stable'
+            ruby: '3.2'
+          - redmine: '5.0-stable'
+            ruby: '3.1'
 
     steps:
       - name: Redmine ${{ matrix.redmine }}

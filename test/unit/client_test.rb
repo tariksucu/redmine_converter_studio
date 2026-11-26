@@ -20,7 +20,7 @@ class ConverterStudioClientTest < ActiveSupport::TestCase
     request = @api.requests.last
     assert_equal "Bearer #{FakeConverterStudioApi::KEY}", request[:authorization]
     assert_equal "redmine/#{RedmineConverterStudio::VERSION}", request[:client]
-    assert_match %r{\Aredmine_converter_studio/1\.0\.0 Redmine/\d+\.\d+\.\d+ Ruby/}, request[:user_agent]
+    assert_match %r{\Aredmine_converter_studio/1\.1\.0 Redmine/\d+\.\d+\.\d+ Ruby/}, request[:user_agent]
   end
 
   def test_formats_need_no_key
@@ -53,7 +53,7 @@ class ConverterStudioClientTest < ActiveSupport::TestCase
   def test_a_small_file_goes_in_one_request
     upload = @client.create_upload('notes.txt', 5)
     @client.send_file(upload, StringIO.new('hello'), 5)
-    request = @api.requests_to('PUT', '/v1/uploads/').sole
+    request = only(@api.requests_to('PUT', '/v1/uploads/'))
     assert_nil request[:offset]
     assert_equal 5, request[:bytes]
   end

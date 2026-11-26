@@ -36,7 +36,7 @@ class ConverterStudioConversionsControllerTest < Redmine::ControllerTest
     post :create, params: { attachment_id: @source.id, to: 'pdf' }
     assert_redirected_to '/issues/1'
     assert_equal 'Converting report.docx to PDF. The new file is added here in a moment: reload the page to see it.', flash[:notice]
-    conversion = ConverterStudioConversion.sole
+    conversion = only(ConverterStudioConversion.all)
     assert_equal 'done', conversion.status
     assert_equal User.find(2), conversion.user
     assert_equal 'report.pdf', conversion.result_attachment.filename
@@ -45,7 +45,7 @@ class ConverterStudioConversionsControllerTest < Redmine::ControllerTest
   def test_create_with_text_recognition
     pdf = attach(@issue, 'scan.pdf')
     post :create, params: { attachment_id: pdf.id, to: 'txt', ocr: '1' }
-    assert_equal({ 'ocr' => true }, ConverterStudioConversion.sole.options)
+    assert_equal({ 'ocr' => true }, only(ConverterStudioConversion.all).options)
   end
 
   def test_create_refuses_a_format_the_file_cannot_become

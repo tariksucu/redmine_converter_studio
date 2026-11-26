@@ -5,7 +5,8 @@
 <div id="converter-studio-links" hidden data-place="<%= own_page ? 'contextual' : 'rows' %>">
   <% items.each do |item| %>
   <span class="converter-studio-item" data-attachment-id="<%= item.attachment.id %>">
-    <%= link_to sprite_icon('reload', label, icon_only: !own_page),
+    <%# Redmine 6.0 and later draw icons with sprite_icon; 5.x with the icon classes alone. %>
+    <%= link_to respond_to?(:sprite_icon) ? sprite_icon('reload', label, icon_only: !own_page) : label,
                 new_converter_studio_conversion_path(item.attachment),
                 class: "converter-studio-convert #{own_page ? 'icon' : 'icon-only'} icon-reload",
                 title: l(:converter_studio_text_convert_title, name: item.attachment.filename) %>

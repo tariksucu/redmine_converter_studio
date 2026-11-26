@@ -9,6 +9,11 @@ module RedmineConverterStudio
   # conversion, waits for it (long polling), then adds the result to the same issue, wiki page or
   # document, with a journal entry on an issue. Every step is saved, so a run that stops (a
   # restart, a lost answer) goes on where it was without a second upload or a second charge.
+  #
+  # A run holds the conversion (ConverterStudioConversion#lease!) and renews its hold at least
+  # every BEAT, during uploads and downloads too. Before it starts a conversion (the charge) and
+  # before it writes the result, it renews the hold or, when another run took over meanwhile (this
+  # one stalled for longer than the lease), stops without a charge or a change.
   class Converter
     include Redmine::I18n
 
@@ -18,10 +23,16 @@ module RedmineConverterStudio
     STEP = 2.minutes
     # How long a conversion may take in all, from its request.
     DEADLINE = 3.hours
-    # One run holds the conversion this long at most without a sign of life (see STALE_AFTER).
-    LEASE = ConverterStudioConversion::STALE_AFTER
+    # A run holds the conversion this long without a sign of life at most, and renews its hold at
+    # least this often while it works (one API request takes a minute at most; a transfer renews it
+    # as its bytes go).
+    LEASE = ConverterStudioConversion::LEASE
+    BEAT = 20.seconds
     # Transient errors (the network, a busy server) are tried again this many times.
     MAX_ATTEMPTS = 5
+
+    # This run lost its hold: it stopped for longer than LEASE and another run took over.
+    class LeaseLost < StandardError; end
 
     attr_reader :conversion
 
@@ -31,27 +42,62 @@ module RedmineConverterStudio
       @conversion = conversion
       @client = client
       @hand_over = hand_over
+      @owner = SecureRandom.hex(8)
     end
 
     def run
       return if conversion.finished? || conversion.quoted?
-      return unless conversion.lease!(LEASE.to_i)
+      return unless conversion.lease!(LEASE.to_i, @owner)
 
+      @held_at = Time.current
       begin
-        check!
-        start! if conversion.remote_id.blank?
-        wait!
-      rescue ApiError => e
-        e.transient? ? try_later(e) : fail!(e.code, message_for(e))
-      rescue StandardError => e
-        Rails.logger.error("Converter Studio: conversion #{conversion.id} stopped: #{e.class}")
-        fail!('unexpected')
+        work
       ensure
-        conversion.release!
+        conversion.release!(@owner)
       end
     end
 
     private
+
+    def work
+      check!
+      start! if conversion.remote_id.blank?
+      wait!
+    rescue LeaseLost
+      taken_over
+    rescue ApiError => e
+      return unless held?
+
+      e.transient? ? try_later(e) : fail!(e.code, message_for(e))
+    rescue StandardError => e
+      Rails.logger.error("Converter Studio: conversion #{conversion.id} stopped: #{e.class}")
+      fail!('unexpected') if held?
+    end
+
+    # Renews the hold, or stops the run (LeaseLost) when another run has the conversion now.
+    def hold!
+      raise LeaseLost unless conversion.extend_lease!(LEASE.to_i, @owner)
+
+      @held_at = Time.current
+    end
+
+    # Whether the conversion is still this run's (renewing the hold).
+    def held?
+      hold!
+      true
+    rescue LeaseLost
+      taken_over
+      false
+    end
+
+    # A sign of life during a long upload or download: the hold is renewed every BEAT.
+    def beat
+      hold! if Time.current - @held_at >= BEAT
+    end
+
+    def taken_over
+      Rails.logger.warn("Converter Studio: conversion #{conversion.id} was taken over by another run; this one stops.")
+    end
 
     def client
       @client ||= Client.from_settings
@@ -91,11 +137,12 @@ module RedmineConverterStudio
       conversion.update!(status: 'uploading')
       upload = client.create_upload(source.filename, source.filesize)
       conversion.update!(upload_id: upload['id'])
-      File.open(source.diskfile, 'rb') { |io| client.send_file(upload, io, source.filesize) }
+      File.open(source.diskfile, 'rb') { |io| client.send_file(upload, io, source.filesize) { beat } }
     end
 
     # The conversion's view, or nil when its upload is gone or incomplete.
     def begin_conversion
+      hold!
       client.start_conversion(upload_id: conversion.upload_id, to: conversion.target_format,
                               options: conversion.options_hash, max_credits: conversion.max_credits.to_i,
                               idempotency_key: conversion.idempotency_key)
@@ -121,7 +168,7 @@ module RedmineConverterStudio
         return fail!('timedOut') if conversion.created_on < DEADLINE.ago
         return if Time.current > step_ends && schedule(10.seconds)
 
-        conversion.extend_lease!(LEASE.to_i)
+        hold!
       end
     end
 
@@ -140,8 +187,10 @@ module RedmineConverterStudio
 
     def finish!(view)
       source = conversion.attachment
-      file = client.download(view['downloadUrl'].to_s, max_attachment_bytes)
+      hold!
+      file = client.download(view['downloadUrl'].to_s, max_attachment_bytes) { beat }
       begin
+        hold!
         attach!(source, file, result_name(view, source))
       ensure
         file.close!
@@ -197,7 +246,7 @@ module RedmineConverterStudio
     def schedule(wait)
       return false unless @hand_over
 
-      ConverterStudioConvertJob.set(wait: wait).perform_later(conversion.id)
+      conversion.enqueue(wait: wait)
       true
     rescue NotImplementedError
       false
@@ -217,7 +266,7 @@ module RedmineConverterStudio
     def result_name(view, source)
       name = view['outputName'].present? ? Client.safe_name(view['outputName']) : nil
       name ||= "#{File.basename(source.filename.to_s, '.*')}.#{conversion.target_format}"
-      name.length > 255 ? name[-255..] : name
+      name.length > 255 ? name[-255, 255] : name
     end
 
     def format_name

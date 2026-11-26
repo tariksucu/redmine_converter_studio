@@ -6,7 +6,8 @@
 
 # One row per attachment conversion: what was asked, how far it got, what it cost and, for a
 # failure, why (a code from a fixed list and the API's own sentence).
-class CreateConverterStudioConversions < ActiveRecord::Migration[7.2]
+# Rails 7.2's migrations where Redmine runs on it (6.0 and later), Rails 6.1's on Redmine 5.x.
+class CreateConverterStudioConversions < ActiveRecord::Migration[Rails.version.to_f >= 7.2 ? 7.2 : 6.1]
   def change
     create_table :converter_studio_conversions do |t|
       t.integer :project_id, null: false
@@ -34,7 +35,8 @@ class CreateConverterStudioConversions < ActiveRecord::Migration[7.2]
     end
     add_index :converter_studio_conversions, [:project_id, :created_on]
     add_index :converter_studio_conversions, :attachment_id
-    add_index :converter_studio_conversions, [:container_type, :container_id]
+    # Named: Rails 6.1 (Redmine 5.x) refuses the default name, longer than 64 characters.
+    add_index :converter_studio_conversions, [:container_type, :container_id], name: 'index_converter_studio_conversions_on_container'
     add_index :converter_studio_conversions, :status
   end
 end

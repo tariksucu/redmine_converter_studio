@@ -21,8 +21,10 @@ install on yours: no LibreOffice, no ImageMagick, no FFmpeg, no Tesseract.
 
 ## Requirements
 
-- Redmine **7.0** or **6.1** (with the Ruby versions they support: 3.2 to 4.0 for 7.0, 3.2 to 3.4
-  for 6.1), on any of Redmine's databases.
+- Redmine **5.0 or newer**: 7.0, 6.1, 6.0, 5.1 or 5.0 (Debian 13 ships 6.0, Debian 12 ships 5.0),
+  with a Ruby that version supports, on any of Redmine's databases. The plugin is tested on the
+  newest release of each: 7.0.3 and 6.1.6 on Ruby 3.4, 6.0.12 on Ruby 3.3, 5.1.13 on Ruby 3.2 and
+  5.0.14 on Ruby 3.1.
 - A Converter Studio account and an API key. Free accounts get credits every day; most documents
   and photos cost 1 credit, reading the text of a picture (OCR) a little more; audio and video are
   priced by their length (video also by its frame size and the format made). See
@@ -44,6 +46,9 @@ $ bundle exec rake redmine:plugins:migrate NAME=redmine_converter_studio RAILS_E
 ```
 
 Restart Redmine. The plugin appears in **Administration » Plugins**.
+
+To update it, replace the folder (or `git pull` in it), run the same `redmine:plugins:migrate`
+command and restart Redmine.
 
 To remove it: `bundle exec rake redmine:plugins:migrate NAME=redmine_converter_studio VERSION=0
 RAILS_ENV=production`, delete the folder and restart. The files it added to issues stay where they
@@ -117,24 +122,32 @@ there (an issue copied with its files) is not converted again, nor is a converte
 
 ## Background jobs
 
-Conversions run through Active Job with the queue adapter Redmine is configured with. Redmine's
-default adapter (`async`) runs them in threads of the web server process. That is enough to try the
-plugin, but a restart loses the conversions it was running (Redmine's own Information page warns
-about this adapter in production). For production:
+Conversions run through Active Job with the queue adapter Redmine is configured with. Each
+conversion's row in Redmine's database keeps how far it got (the upload, the conversion started at
+Converter Studio), so nothing is uploaded or charged twice: a run that starts again goes on where
+the last one stopped, and a repeated start gets the first conversion back (the API's
+`Idempotency-Key`).
 
-- Use a persistent adapter with its worker, for example
+- **Redmine's default adapter (`async`)** runs conversions in threads of the web server process, so
+  a restart (a deploy, an update, a crash) stops the ones it was running. After a restart, Redmine
+  picks them up on its own: after the requests it serves, each process looks (at most once a
+  minute) for conversions nobody is working on any more and runs them again from where they
+  stopped. A conversion that was running is free to take two minutes after its last sign of life
+  at most, so it goes on a few minutes after Redmine is back and someone opens a page.
+- **A persistent adapter** with its worker keeps the jobs over a restart, and runs them in the
+  worker instead of the web server, for example
   [Sidekiq](https://github.com/sidekiq/sidekiq/wiki/Active-Job),
   [Solid Queue](https://github.com/rails/solid_queue) or [GoodJob](https://github.com/bensheldon/good_job)
   (PostgreSQL): add the gem to Redmine's `Gemfile.local`, set it in
   `config/additional_environment.rb` (`config.active_job.queue_adapter = :sidekiq`), and start the
-  worker with the same environment as the web server. Conversions use the `default` queue.
-- Or keep `async` and run the conversions a restart interrupted from cron:
-  `bundle exec rake redmine:converter_studio:resume RAILS_ENV=production`. A conversion with no sign
-  of life for 30 minutes also gets **Run again** on the project page.
+  worker with the same environment as the web server. Conversions use the `default` queue. If a
+  worker is killed in the middle of a job, run the conversions it lost with
+  `bundle exec rake redmine:converter_studio:resume RAILS_ENV=production` (from cron, if you like).
+- A conversion nobody has worked on for 30 minutes also gets **Run again** on the project page.
 
 A long conversion (a video) waits two minutes in one job run, then hands over to a new run, so it
-never holds a worker for long. Nothing is uploaded or charged twice: every step is saved, and a run
-that starts again goes on where the last one stopped (the API's `Idempotency-Key`).
+never holds a worker for long. A run holds its conversion while it works, so two runs never work
+on one conversion at once.
 
 ## Limits
 

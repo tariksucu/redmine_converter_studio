@@ -9,7 +9,7 @@
 
 # The plugin's code outside Rails' own folders (loaded by Redmine's autoloader).
 module RedmineConverterStudio
-  VERSION = '1.0.0'
+  VERSION = '1.1.0'
   PLUGIN_ID = :redmine_converter_studio
   # Names this plugin on its API calls (converter.studio's statistics of its connectors).
   CLIENT_NAME = 'redmine'

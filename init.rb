@@ -16,7 +16,7 @@ Redmine::Plugin.register :redmine_converter_studio do
   url 'https://github.com/tariksucu/redmine_converter_studio'
   author_url 'https://converter.studio'
 
-  requires_redmine version_or_higher: '6.1.0'
+  requires_redmine version_or_higher: '5.0.0'
 
   settings default: {
     'base_url' => RedmineConverterStudio::DEFAULT_BASE_URL,
@@ -37,8 +37,10 @@ Redmine::Plugin.register :redmine_converter_studio do
        caption: :label_converter_studio, param: :project_id, after: :files
 end
 
-# Redmine has no hook for a new attachment or for saving plugin settings: these add a callback to
-# each (no core method is replaced). The view hooks register themselves when loaded.
+# Redmine has no hook for a new attachment, for saving plugin settings or for a request served:
+# these add a callback to each (no core method is replaced). The view hooks register themselves
+# when loaded.
 Attachment.include RedmineConverterStudio::AttachmentPatch
 Setting.include RedmineConverterStudio::SettingPatch
+ApplicationController.include RedmineConverterStudio::ControllerPatch
 RedmineConverterStudio::Hooks

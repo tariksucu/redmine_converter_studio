@@ -61,6 +61,13 @@ class ConverterStudioIssuePageTest < Redmine::ControllerTest
     assert_response :success
     assert_select '#converter-studio-links', 0
   end
+
+  # After a request, conversions a restart left behind are looked for (RedmineConverterStudio::Recovery).
+  def test_a_request_lets_lost_conversions_be_looked_for
+    RedmineConverterStudio::Recovery.expects(:poke).once
+    get :show, params: { id: 1 }
+    assert_response :success
+  end
 end
 
 class ConverterStudioAttachmentPageTest < Redmine::ControllerTest
@@ -73,7 +80,10 @@ class ConverterStudioAttachmentPageTest < Redmine::ControllerTest
     @request.session[:user_id] = 2
     get :show, params: { id: source.id }
     assert_response :success
-    assert_select '#converter-studio-links[data-place=contextual] a.converter-studio-convert span.icon-label', text: 'Convert…'
+    # An SVG icon and its label on Redmine 6.0 and later; the label and the icon classes on 5.x.
+    label = Redmine::VERSION::MAJOR >= 6 ? ' span.icon-label' : ''
+    assert_select "#converter-studio-links[data-place=contextual] a.converter-studio-convert.icon.icon-reload#{label}",
+                  text: 'Convert…'
   end
 end
 

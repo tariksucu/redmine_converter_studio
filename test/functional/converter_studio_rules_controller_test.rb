@@ -18,7 +18,7 @@ class ConverterStudioRulesControllerTest < Redmine::ControllerTest
     post :create, params: { project_id: 'ecookbook',
                             rule: { extensions: 'HEIC heif', target_format: 'jpg', containers: %w[issues wiki] } }
     assert_redirected_to '/projects/ecookbook/converter_studio#rules'
-    rule = ConverterStudioRule.sole
+    rule = only(ConverterStudioRule.all)
     assert_equal ['heic heif', 'jpg', 'issues,wiki', true, User.find(2)],
                  [rule.extensions, rule.target_format, rule.containers, rule.active, rule.author]
   end

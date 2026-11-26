@@ -9,6 +9,13 @@ require_relative '../../../test/test_helper'
 require_relative 'support/fake_api'
 
 module ConverterStudioTestHelper
+  extend ActiveSupport::Concern
+
+  included do
+    # Redmine 5.1 and later load every fixture for each test; 5.0 has each test name its own.
+    fixtures :all
+  end
+
   def setup_converter_studio(key: FakeConverterStudioApi::KEY)
     @api = FakeConverterStudioApi.instance
     @api.reset
@@ -30,5 +37,12 @@ module ConverterStudioTestHelper
 
   def convert(attachment, target, user: User.find(2), options: {})
     ConverterStudioConversion.start!(attachment: attachment, user: user, target: target, options: options).reload
+  end
+
+  # The one item of a list (Rails 7.0's Enumerable#sole, for Redmine 5.x on Rails 6.1 too).
+  def only(list)
+    items = list.to_a
+    assert_equal 1, items.size, "expected one item, got #{items.size}"
+    items.first
   end
 end

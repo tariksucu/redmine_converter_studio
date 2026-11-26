@@ -6,7 +6,8 @@
 
 # An automatic conversion of a project: new attachments with these extensions, on these kinds of
 # containers (issues, wiki pages, documents), become this format. Off until someone adds one.
-class ConverterStudioRule < ApplicationRecord
+# (Redmine 6.0 and later have ApplicationRecord; 5.x models inherit ActiveRecord::Base directly.)
+class ConverterStudioRule < (defined?(ApplicationRecord) ? ApplicationRecord : ActiveRecord::Base)
   CONTAINERS = %w[issues wiki documents].freeze
   EXTENSION = /\A[a-z0-9]{1,10}(\.[a-z0-9]{1,10})?\z/
 

@@ -17,10 +17,9 @@ module RedmineConverterStudio
       return [] unless kind && Access.enabled?(project) && Configuration.configured?
 
       rules = ConverterStudioRule.active.where(project_id: project.id).order(:id).to_a
-      rules.filter_map do |rule|
-        next unless rule.matches?(kind, attachment.filename)
-        next if result_present?(container, attachment, rule.target_format)
-
+      rules = rules.select { |rule| rule.matches?(kind, attachment.filename) }
+      rules = rules.reject { |rule| result_present?(container, attachment, rule.target_format) }
+      rules.map do |rule|
         ConverterStudioConversion.start!(attachment: attachment, user: attachment.author || User.anonymous,
                                          target: rule.target_format, options: rule.options_hash, rule: rule)
       end

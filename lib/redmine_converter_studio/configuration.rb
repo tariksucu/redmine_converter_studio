@@ -59,7 +59,7 @@ module RedmineConverterStudio
       return nil if key.blank?
 
       prefix = key.start_with?('cvs_live_') ? 'cvs_live_' : ''
-      "#{prefix}…#{key[-4..]}"
+      "#{prefix}…#{key[-4, 4]}"
     end
 
     def base_url

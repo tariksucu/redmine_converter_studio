@@ -5,14 +5,25 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # One attachment's conversion, from the request to the new attachment (or the reason it failed).
+# The table is also the plugin's queue: a row keeps how far its conversion got, so it goes on
+# after a restart without a second upload or a second charge, whatever queue adapter runs its job.
 #
 # queued → uploading → converting → done, or failed at any step; quoted when the price is above
 # the most a file may cost on its own, until someone approves it.
-class ConverterStudioConversion < ApplicationRecord
+#
+# Redmine 6.0 and later have ApplicationRecord; 5.x models inherit ActiveRecord::Base directly.
+class ConverterStudioConversion < (defined?(ApplicationRecord) ? ApplicationRecord : ActiveRecord::Base)
   STATUSES = %w[queued uploading converting quoted done failed].freeze
   FINISHED = %w[done failed].freeze
-  # Not finished and not touched for this long: its job was lost (a restart with the default
-  # in-process queue). It can be run again. A running job shows a sign of life well within it.
+  # Those a job is meant to be working on (quoted ones wait for someone's approval).
+  ACTIVE = %w[queued uploading converting].freeze
+  # A run holds its conversion this long, and renews the hold while it works: a run that stopped
+  # (a restart, a crash) lets go of it this long after its last sign of life at most.
+  LEASE = 2.minutes
+  # A conversion nobody holds whose job should have started this long ago: its job was lost (a
+  # restart with Redmine's default in-process queue). RedmineConverterStudio::Recovery runs it again.
+  GRACE = 2.minutes
+  # Not finished and not touched for this long: "Run again" is offered on the project page.
   STALE_AFTER = 30.minutes
   TARGET = /\A[a-z0-9]{1,16}\z/
 
@@ -23,27 +34,51 @@ class ConverterStudioConversion < ApplicationRecord
   belongs_to :rule, class_name: 'ConverterStudioRule', optional: true
   belongs_to :container, polymorphic: true, optional: true
 
-  serialize :options, coder: JSON
+  # Rails 7.1 takes the coder as an option (Redmine 6.0 and later), 6.1 as an argument (Redmine 5.x).
+  if ActiveRecord.version >= Gem::Version.new('7.1')
+    serialize :options, coder: JSON
+  else
+    serialize :options, JSON
+  end
 
   validates :target_format, format: { with: TARGET }
   validates :status, inclusion: { in: STATUSES }
 
   scope :unfinished, -> { where.not(status: FINISHED) }
   scope :recent_first, -> { order(created_on: :desc, id: :desc) }
+  # Waiting for a job that is not coming: nobody holds them, and their run is overdue.
+  scope :abandoned, lambda { |now = Time.current|
+    where(status: ACTIVE).where('locked_until IS NULL OR locked_until < ?', now)
+                         .where('run_after IS NULL OR run_after < ?', now - GRACE)
+  }
 
   # Starts converting an attachment: the row, then its job.
   def self.start!(attachment:, user:, target:, options: {}, rule: nil)
     conversion = create!(
       project: attachment.project, attachment: attachment, source_name: attachment.filename.to_s[0, 255],
       container: attachment.container, user: user, rule: rule, target_format: target,
-      options: options.presence, status: 'queued', max_credits: RedmineConverterStudio::Configuration.max_credits
+      options: options.presence, status: 'queued', max_credits: RedmineConverterStudio::Configuration.max_credits,
+      run_after: Time.current
     )
     conversion.enqueue
     conversion
   end
 
-  def enqueue
+  # Queues its job, now or after +wait+, and notes when it is due, so a job lost meanwhile is
+  # noticed (abandoned).
+  def enqueue(wait: nil)
+    self.class.where(id: id).update_all(run_after: Time.current + (wait || 0))
+    job = wait ? ConverterStudioConvertJob.set(wait: wait) : ConverterStudioConvertJob
+    job.perform_later(id)
+  end
+
+  # Queues it again when its job was lost, unless another process did just now: false then.
+  def requeue_if_abandoned!(now = Time.current)
+    taken = self.class.abandoned(now).where(id: id).update_all(run_after: now)
+    return false unless taken == 1
+
     ConverterStudioConvertJob.perform_later(id)
+    true
   end
 
   def finished?
@@ -62,9 +97,10 @@ class ConverterStudioConversion < ApplicationRecord
     status == 'quoted'
   end
 
-  # Its job is gone: not finished, not waiting for an approval, untouched for a while.
+  # Its job is gone: not finished, not waiting for an approval, nobody working on it for a while.
   def stale?
-    !finished? && !quoted? && updated_on.present? && updated_on < STALE_AFTER.ago
+    !finished? && !quoted? && updated_on.present? && updated_on < STALE_AFTER.ago &&
+      (locked_until.nil? || locked_until < Time.current)
   end
 
   def retryable?
@@ -91,26 +127,30 @@ class ConverterStudioConversion < ApplicationRecord
     "redmine-#{id}-#{upload_id}"
   end
 
-  # Takes the conversion for one job run; false when another run has it.
-  def lease!(seconds)
+  # Takes the conversion for one job run, as +owner+ (a token of that run); false when another
+  # run holds it.
+  def lease!(seconds = LEASE, owner = SecureRandom.hex(8))
     now = Time.current
     taken = self.class.where(id: id).where('locked_until IS NULL OR locked_until < ?', now)
-                .update_all(locked_until: now + seconds, updated_on: now)
+                .update_all(locked_until: now + seconds, locked_by: owner, updated_on: now)
     reload if taken == 1
     taken == 1
   end
 
-  def extend_lease!(seconds)
-    self.class.where(id: id).update_all(locked_until: Time.current + seconds, updated_on: Time.current)
+  # Renews the hold of +owner+; false when it lost it (it stopped for longer than its lease and
+  # another run took over): that run must then stop without changing anything.
+  def extend_lease!(seconds = LEASE, owner = locked_by)
+    now = Time.current
+    self.class.where(id: id, locked_by: owner).update_all(locked_until: now + seconds, updated_on: now) == 1
   end
 
-  def release!
-    self.class.where(id: id).update_all(locked_until: nil)
+  def release!(owner = locked_by)
+    self.class.where(id: id, locked_by: owner).update_all(locked_until: nil, locked_by: nil)
   end
 
   # Ready to run again from the start: a new upload, a new conversion.
   def reset!
     update!(status: 'queued', upload_id: nil, remote_id: nil, credits: nil,
-            error_code: nil, error_message: nil, attempts: 0, locked_until: nil, finished_on: nil)
+            error_code: nil, error_message: nil, attempts: 0, locked_until: nil, locked_by: nil, finished_on: nil)
   end
 end

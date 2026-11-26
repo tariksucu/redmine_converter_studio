@@ -50,12 +50,8 @@ class ConverterStudioConfigurationTest < ActiveSupport::TestCase
   end
 
   # Redmine's database_cipher_key (config/configuration.yml), whatever this Redmine has.
-  def with_cipher_key(key, &)
-    Redmine::Configuration.with('database_cipher_key' => key, &)
-  end
-
   def test_the_key_is_encrypted_with_the_database_cipher_key
-    with_cipher_key('secret-of-this-redmine') do
+    Redmine::Configuration.with('database_cipher_key' => 'secret-of-this-redmine') do
       save_form('new_api_key' => KEY)
       assert_match(/\Aaes-256-cbc:/, saved['api_key'])
       assert_not_includes saved.to_s, KEY
@@ -63,11 +59,11 @@ class ConverterStudioConfigurationTest < ActiveSupport::TestCase
       assert Configuration.encryption?
     end
     # Without the cipher key it cannot be read, and is not used.
-    with_cipher_key(nil) { assert_equal '', Configuration.api_key }
+    Redmine::Configuration.with('database_cipher_key' => nil) { assert_equal '', Configuration.api_key }
   end
 
   def test_without_a_cipher_key_the_key_is_stored_as_it_is
-    with_cipher_key(nil) do
+    Redmine::Configuration.with('database_cipher_key' => nil) do
       save_form('new_api_key' => KEY)
       assert_equal KEY, saved['api_key']
       assert_not Configuration.encryption?
@@ -75,9 +71,9 @@ class ConverterStudioConfigurationTest < ActiveSupport::TestCase
   end
 
   def test_a_plain_key_is_encrypted_when_the_settings_are_saved_again
-    with_cipher_key(nil) { save_form('new_api_key' => KEY) }
+    Redmine::Configuration.with('database_cipher_key' => nil) { save_form('new_api_key' => KEY) }
     assert_equal KEY, saved['api_key']
-    with_cipher_key('secret-of-this-redmine') do
+    Redmine::Configuration.with('database_cipher_key' => 'secret-of-this-redmine') do
       save_form('new_api_key' => '', 'max_credits' => '20')
       assert_match(/\Aaes-256-cbc:/, saved['api_key'])
       assert_equal KEY, Configuration.api_key

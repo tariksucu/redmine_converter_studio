@@ -27,7 +27,7 @@ class ConverterStudioRulesTest < ActiveSupport::TestCase
   def test_a_new_attachment_is_converted_by_the_projects_rule
     rule = add_rule
     source = attach(@issue, 'IMG_0001.HEIC')
-    conversion = ConverterStudioConversion.sole
+    conversion = only(ConverterStudioConversion.all)
     assert_equal [source, rule, 'jpg', 'done'], [conversion.attachment, conversion.rule, conversion.target_format, conversion.status]
     assert_equal User.find(2), conversion.user
     assert_equal 'IMG_0001.jpg', conversion.result_attachment.filename
@@ -44,7 +44,7 @@ class ConverterStudioRulesTest < ActiveSupport::TestCase
     issue.init_journal(User.find(2))
     issue.save_attachments([{ 'token' => upload.token }])
     issue.save!
-    assert_equal 'IMG_0002.jpg', ConverterStudioConversion.sole.result_attachment.filename
+    assert_equal 'IMG_0002.jpg', only(ConverterStudioConversion.all).result_attachment.filename
   end
 
   def test_rules_apply_only_where_they_are_meant

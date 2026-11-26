@@ -6,7 +6,8 @@
 
 # A project's automatic conversions: new attachments with these extensions, on these kinds of
 # containers, are converted to one format. A project has none until someone adds one.
-class CreateConverterStudioRules < ActiveRecord::Migration[7.2]
+# Rails 7.2's migrations where Redmine runs on it (6.0 and later), Rails 6.1's on Redmine 5.x.
+class CreateConverterStudioRules < ActiveRecord::Migration[Rails.version.to_f >= 7.2 ? 7.2 : 6.1]
   def change
     create_table :converter_studio_rules do |t|
       t.integer :project_id, null: false

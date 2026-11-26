@@ -58,7 +58,8 @@ module RedmineConverterStudio
     end
 
     def latest_conversions(ids)
-      ConverterStudioConversion.where(attachment_id: ids).where(created_on: 1.day.ago..)
+      ConverterStudioConversion.where(attachment_id: ids)
+                               .where(ConverterStudioConversion.arel_table[:created_on].gteq(1.day.ago))
                                .recent_first.to_a.group_by(&:attachment_id)
                                .transform_values(&:first).reject { |_, c| c.done? }
     end
